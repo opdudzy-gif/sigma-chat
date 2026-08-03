@@ -10,7 +10,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 var hub = new ChatHub();
-app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "5.1", status = "online", storage = "ephemeral" }));
+app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "5.2", status = "online", storage = "ephemeral" }));
 app.MapGet("/health", () => Results.Ok("ok"));
 app.Map("/ws", async context =>
 {
@@ -72,7 +72,12 @@ sealed class ChatHub
                 else if (msg.Type == "image" && msg.Image is { Length: > 0 and <= 1_500_000 })
                 {
                     var id = Guid.NewGuid().ToString("N")[..10]; room.Owners[id] = member.Id;
-                    await Broadcast(room, new { type = "image", id, senderId = member.Id, sender = member.Name, image = msg.Image, once = msg.Once, timestamp = DateTimeOffset.UtcNow }, ct);
+                    await Broadcast(room, new { type = "image", id, senderId = member.Id, sender = member.Name, image = msg.Image, timestamp = DateTimeOffset.UtcNow }, ct);
+                }
+                else if (msg.Type == "file" && msg.Data is { Length: > 0 and <= 7_000_000 } && CleanFileName(msg.FileName) is { Length: > 0 } fileName)
+                {
+                    var id = Guid.NewGuid().ToString("N")[..10]; room.Owners[id] = member.Id;
+                    await Broadcast(room, new { type = "file", id, senderId = member.Id, sender = member.Name, fileName, data = msg.Data, timestamp = DateTimeOffset.UtcNow }, ct);
                 }
                 else if (msg.Type == "delete" && msg.Id is { Length: > 0 } id && room.Owners.TryGetValue(id, out var owner) && owner == member.Id)
                 {
@@ -107,7 +112,7 @@ sealed class ChatHub
             result = await ws.ReceiveAsync(buffer, ct);
             if (result.MessageType == WebSocketMessageType.Close) return null;
             data.Write(buffer, 0, result.Count);
-            if (data.Length > 2_000_000) return null;
+            if (data.Length > 9_000_000) return null;
         } while (!result.EndOfMessage);
         try { return JsonSerializer.Deserialize<Incoming>(data.ToArray(), json); } catch { return null; }
     }
@@ -128,8 +133,9 @@ sealed class ChatHub
         return Broadcast(room, new { type = "members", members = names }, ct);
     }
     static string Clean(string? text, int max) => new string((text ?? "").Where(c => char.IsLetterOrDigit(c) || c is ' ' or '-' or '_').Take(max).ToArray()).Trim();
+    static string CleanFileName(string? value) => Path.GetFileName(value ?? "").Trim().Length > 120 ? Path.GetFileName(value ?? "").Trim()[..120] : Path.GetFileName(value ?? "").Trim();
     static byte[] Hash(string value) => SHA256.HashData(Encoding.UTF8.GetBytes(value));
 }
 sealed class Room(byte[] keyHash) { public byte[] KeyHash { get; } = keyHash; public object Gate { get; } = new(); public ConcurrentDictionary<string, Member> Members { get; } = new(); public ConcurrentDictionary<string,string> Owners { get; } = new(); }
 sealed record Member(string Id, string Name, WebSocket Socket);
-sealed class Incoming { public string? Type { get; set; } public string? Room { get; set; } public string? Name { get; set; } public string? Key { get; set; } public string? Message { get; set; } public string? Image { get; set; } public string? Id { get; set; } public bool Once { get; set; } }
+sealed class Incoming { public string? Type { get; set; } public string? Room { get; set; } public string? Name { get; set; } public string? Key { get; set; } public string? Message { get; set; } public string? Image { get; set; } public string? Id { get; set; } public string? FileName { get; set; } public string? Data { get; set; } }
