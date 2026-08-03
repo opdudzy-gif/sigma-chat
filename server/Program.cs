@@ -10,7 +10,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 var hub = new ChatHub();
-app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "4.1", status = "online", storage = "ephemeral" }));
+app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "5.1", status = "online", storage = "ephemeral" }));
 app.MapGet("/health", () => Results.Ok("ok"));
 app.Map("/ws", async context =>
 {
@@ -36,7 +36,11 @@ sealed class ChatHub
             var name = Clean(join.Name, 24);
             if (roomCode.Length < 4 || name.Length < 1)
             { await Send(ws, new { type = "error", message = "Use a room code of at least 4 characters and enter a name." }, ct); return; }
-            var proposedKey = join.Key ?? "";
+            var existing = rooms.TryGetValue(roomCode, out room);
+            await Send(ws, new { type = "keyRequired", create = !existing }, ct);
+            var auth = await Receive(ws, ct);
+            if (auth?.Type != "auth" || string.IsNullOrWhiteSpace(auth.Key)) return;
+            var proposedKey = auth.Key;
             room = rooms.GetOrAdd(roomCode, _ => new Room(Hash(proposedKey)));
             member = new Member(Guid.NewGuid().ToString("N")[..8], name, ws);
             bool isOwner;
@@ -68,7 +72,7 @@ sealed class ChatHub
                 else if (msg.Type == "image" && msg.Image is { Length: > 0 and <= 1_500_000 })
                 {
                     var id = Guid.NewGuid().ToString("N")[..10]; room.Owners[id] = member.Id;
-                    await Broadcast(room, new { type = "image", id, senderId = member.Id, sender = member.Name, image = msg.Image, timestamp = DateTimeOffset.UtcNow }, ct);
+                    await Broadcast(room, new { type = "image", id, senderId = member.Id, sender = member.Name, image = msg.Image, once = msg.Once, timestamp = DateTimeOffset.UtcNow }, ct);
                 }
                 else if (msg.Type == "delete" && msg.Id is { Length: > 0 } id && room.Owners.TryGetValue(id, out var owner) && owner == member.Id)
                 {
@@ -128,4 +132,4 @@ sealed class ChatHub
 }
 sealed class Room(byte[] keyHash) { public byte[] KeyHash { get; } = keyHash; public object Gate { get; } = new(); public ConcurrentDictionary<string, Member> Members { get; } = new(); public ConcurrentDictionary<string,string> Owners { get; } = new(); }
 sealed record Member(string Id, string Name, WebSocket Socket);
-sealed class Incoming { public string? Type { get; set; } public string? Room { get; set; } public string? Name { get; set; } public string? Key { get; set; } public string? Message { get; set; } public string? Image { get; set; } public string? Id { get; set; } }
+sealed class Incoming { public string? Type { get; set; } public string? Room { get; set; } public string? Name { get; set; } public string? Key { get; set; } public string? Message { get; set; } public string? Image { get; set; } public string? Id { get; set; } public bool Once { get; set; } }

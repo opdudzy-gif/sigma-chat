@@ -4,6 +4,8 @@ SigmaChat is a lightweight real-time Windows chat app. People join with the same
 
 Chat history and received images are saved locally in `%LOCALAPPDATA%\SigmaChat` and reload when the same room is opened again. Images are compressed before being relayed.
 
+Room access uses a separate key prompt after selecting a room. Images can optionally be marked **View once**; after a recipient reveals one, it is shown for 10 seconds and then removed from that computer.
+
 Right-click a message or image to delete it locally. Senders can also choose **Delete for everyone** while the server room remains active.
 
 ## Quick local test

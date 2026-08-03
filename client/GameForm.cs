@@ -9,7 +9,6 @@ sealed class GameForm : Form
     readonly TextBox server = new() { Text = "wss://sigmachat-server.onrender.com/ws", Width = 330 };
     readonly TextBox room = new() { Text = "SIGMA-PRIVATE", Width = 180 };
     readonly TextBox playerName = new() { Text = $"User{Random.Shared.Next(100,999)}", Width = 180 };
-    readonly TextBox roomKey = new() { UseSystemPasswordChar = true, Width = 180 };
     readonly Button connect = new() { Text = "JOIN PRIVATE ROOM", Width = 180, Height = 40, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(63, 89, 255), ForeColor = Color.White };
     readonly Label status = new() { AutoSize = true, ForeColor = Color.Silver };
     readonly Panel login = new() { BackColor = Color.FromArgb(28, 31, 45), Width = 440, Height = 380 };
@@ -18,6 +17,7 @@ sealed class GameForm : Form
     readonly TextBox compose = new() { Font = new Font("Segoe UI", 11), BackColor = Color.FromArgb(37,41,57), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
     readonly Button send = new() { Text = "SEND", BackColor = Color.FromArgb(63,89,255), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Button attach = new() { Text = "IMAGE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+    readonly CheckBox viewOnce = new() { Text = "View once", ForeColor = Color.Silver, BackColor = Color.FromArgb(18,20,30), AutoSize = true };
     readonly Label header = new() { ForeColor = Color.White, Font = new Font("Segoe UI", 13, FontStyle.Bold), Text = "SigmaChat" };
     ClientWebSocket? socket; CancellationTokenSource? cts; string myId = "", activeRoom = "";
     readonly List<SavedItem> history = [];
@@ -26,10 +26,10 @@ sealed class GameForm : Form
     public GameForm()
     {
         Text="SigmaChat — Private Rooms"; ClientSize=new(920,600); MinimumSize=new(720,480); BackColor=Color.FromArgb(18,20,30); KeyPreview=true;
-        Controls.AddRange([header,messages,members,compose,attach,send,login]); Directory.CreateDirectory(dataFolder);
+        Controls.AddRange([header,messages,members,compose,attach,viewOnce,send,login]); Directory.CreateDirectory(dataFolder);
         var title=new Label { Text="Σ  SIGMACHAT", Font=new Font("Segoe UI",24,FontStyle.Bold), ForeColor=Color.DeepSkyBlue, AutoSize=true, Left=72,Top=25 }; login.Controls.Add(title);
-        AddField("Server",server,90); AddField("Private room code",room,140); AddField("Room key",roomKey,190); AddField("Your name",playerName,240);
-        connect.Left=130; connect.Top=292; login.Controls.Add(connect); status.Left=20; status.Top=342; login.Controls.Add(status);
+        AddField("Server",server,105); AddField("Private room code",room,165); AddField("Your name",playerName,225);
+        connect.Left=130; connect.Top=280; login.Controls.Add(connect); status.Left=20; status.Top=335; login.Controls.Add(status);
         connect.Click += async (_,_) => await Join(); send.Click += async (_,_) => await SendChat(); attach.Click += async (_,_) => await SendImage(); Shown += async(_,_)=>await Updater.Check(this);
         compose.KeyDown += async (_,e) => { if(e.KeyCode==Keys.Enter && !e.Shift) { e.SuppressKeyPress=true; await SendChat(); } };
         Resize += (_,_) => LayoutUi(); FormClosing += (_,_) => cts?.Cancel(); LayoutUi(); ShowLogin(true);
@@ -39,13 +39,13 @@ sealed class GameForm : Form
     {
         login.Left=(ClientSize.Width-login.Width)/2;login.Top=(ClientSize.Height-login.Height)/2;
         header.SetBounds(18,12,ClientSize.Width-36,32); members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
-        messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-120); compose.SetBounds(18,ClientSize.Height-52,ClientSize.Width-405,34); attach.SetBounds(ClientSize.Width-375,ClientSize.Height-52,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-52,90,34);
+        messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-120); compose.SetBounds(18,ClientSize.Height-52,ClientSize.Width-495,34); viewOnce.Location=new Point(ClientSize.Width-465,ClientSize.Height-43);attach.SetBounds(ClientSize.Width-375,ClientSize.Height-52,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-52,90,34);
     }
-    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=send.Visible=!show; }
+    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=viewOnce.Visible=send.Visible=!show; }
     async Task Join()
     {
         connect.Enabled=false;status.Text="Connecting…";
-        try { socket=new ClientWebSocket();cts=new();activeRoom=SafeName(room.Text.ToUpperInvariant());await socket.ConnectAsync(new Uri(server.Text.Trim()),cts.Token);await SendJson(new{type="join",room=room.Text,name=playerName.Text,key=roomKey.Text});LoadHistory();ShowLogin(false);_ = ReceiveLoop(cts.Token); }
+        try { socket=new ClientWebSocket();cts=new();activeRoom=SafeName(room.Text.ToUpperInvariant());await socket.ConnectAsync(new Uri(server.Text.Trim()),cts.Token);await SendJson(new{type="join",room=room.Text,name=playerName.Text});LoadHistory();ShowLogin(false);_ = ReceiveLoop(cts.Token); }
         catch(Exception ex){status.Text="Could not connect: "+ex.Message;connect.Enabled=true;}
     }
     async Task SendChat()
@@ -63,7 +63,7 @@ sealed class GameForm : Form
             using var resized=new Bitmap((int)(original.Width*scale),(int)(original.Height*scale));using(var g=Graphics.FromImage(resized))g.DrawImage(original,0,0,resized.Width,resized.Height);
             using var ms=new MemoryStream();resized.Save(ms,System.Drawing.Imaging.ImageFormat.Jpeg);
             if(ms.Length>1_000_000){MessageBox.Show("Please choose a smaller image.","Image too large");return;}
-            await SendJson(new{type="image",image=Convert.ToBase64String(ms.ToArray())});
+            await SendJson(new{type="image",image=Convert.ToBase64String(ms.ToArray()),once=viewOnce.Checked});viewOnce.Checked=false;
         } catch(Exception ex){MessageBox.Show("Could not send image: "+ex.Message);}
     }
     async Task SendJson(object value){var data=Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value));await socket!.SendAsync(data,WebSocketMessageType.Text,true,cts!.Token);}
@@ -77,7 +77,12 @@ sealed class GameForm : Form
                 using var payload=new MemoryStream();WebSocketReceiveResult r;
                 do { r=await socket.ReceiveAsync(buffer,ct);if(r.MessageType==WebSocketMessageType.Close)return;payload.Write(buffer,0,r.Count);if(payload.Length>3_000_000)throw new InvalidDataException("Message too large"); } while(!r.EndOfMessage);
                 using var doc=JsonDocument.Parse(payload.ToArray());var root=doc.RootElement;var type=root.GetProperty("type").GetString();
-                if(type=="welcome")
+                if(type=="keyRequired")
+                {
+                    var creating=root.GetProperty("create").GetBoolean();var key=(string?)Invoke(()=>KeyPrompt.Ask(this,creating));
+                    if(string.IsNullOrEmpty(key)){BeginInvoke(()=>Disconnect("A room key is required."));return;}await SendJson(new{type="auth",key});
+                }
+                else if(type=="welcome")
                 {
                     myId=root.GetProperty("id").GetString()??"";
                     var joinedRoom=root.GetProperty("room").GetString()??"PRIVATE ROOM";
@@ -86,7 +91,7 @@ sealed class GameForm : Form
                 else if(type=="members") { var names=root.GetProperty("members").EnumerateArray().Select(x=>"●  "+x.GetString()).ToArray();BeginInvoke(()=>{members.Items.Clear();members.Items.Add("ROOM MEMBERS");members.Items.AddRange(names);}); }
                 else if(type=="notice") Append("SYSTEM",root.GetProperty("message").GetString()??"",Color.Gray,null,false,true);
                 else if(type=="chat") { var senderId=root.GetProperty("senderId").GetString();Append(root.GetProperty("sender").GetString()??"",root.GetProperty("message").GetString()??"",senderId==myId?Color.DeepSkyBlue:Color.MediumPurple,root.GetProperty("id").GetString(),senderId==myId); }
-                else if(type=="image") { var senderId=root.GetProperty("senderId").GetString();SaveAndAppendImage(root.GetProperty("sender").GetString()??"",root.GetProperty("image").GetString()??"",root.GetProperty("id").GetString(),senderId==myId); }
+                else if(type=="image") { var senderId=root.GetProperty("senderId").GetString();var once=root.TryGetProperty("once",out var o)&&o.GetBoolean();SaveAndAppendImage(root.GetProperty("sender").GetString()??"",root.GetProperty("image").GetString()??"",root.GetProperty("id").GetString(),senderId==myId,once); }
                 else if(type=="delete") { var id=root.GetProperty("id").GetString();if(id is not null)BeginInvoke(()=>DeleteLocal(id)); }
                 else if(type=="error") { Disconnect(root.GetProperty("message").GetString()??"Server error");return; }
             }
@@ -99,9 +104,15 @@ sealed class GameForm : Form
         label.Font=new Font("Segoe UI",system?8.5f:10,system?FontStyle.Italic:FontStyle.Regular);if(id is not null)AddDeleteMenu(label,id,mine);messages.Controls.Add(label);messages.ScrollControlIntoView(label);
         if(save&&id is not null){history.Add(new SavedItem(id,"text",name,text,null,DateTime.Now,mine));SaveHistory();}
     });
-    void SaveAndAppendImage(string name,string base64,string? id,bool mine)
+    void SaveAndAppendImage(string name,string base64,string? id,bool mine,bool once)
     {
-        try { var path=Path.Combine(dataFolder,$"image-{Guid.NewGuid():N}.jpg");File.WriteAllBytes(path,Convert.FromBase64String(base64));BeginInvoke(()=>AddImage(name,path,id,mine,true)); } catch { Append("SYSTEM","An image could not be displayed.",Color.Gray,null,false,true); }
+        try { var path=Path.Combine(dataFolder,$"image-{Guid.NewGuid():N}.jpg");File.WriteAllBytes(path,Convert.FromBase64String(base64));BeginInvoke(()=>{if(once)AddOneTimeImage(name,path,id);else AddImage(name,path,id,mine,true);}); } catch { Append("SYSTEM","An image could not be displayed.",Color.Gray,null,false,true); }
+    }
+    void AddOneTimeImage(string name,string path,string? id)
+    {
+        var panel=new Panel{Width=Math.Max(300,messages.ClientSize.Width-35),Height=72,Margin=new Padding(0,2,0,2),BackColor=Color.FromArgb(29,32,46),Tag=id};
+        var button=new Button{Text=$"View one-time image from {name}",Left=10,Top=15,Width=260,Height=38,BackColor=Color.FromArgb(63,89,255),ForeColor=Color.White,FlatStyle=FlatStyle.Flat};panel.Controls.Add(button);messages.Controls.Add(panel);
+        button.Click+=(_,_)=>{button.Dispose();panel.Height=250;var picture=new PictureBox{Image=Image.FromFile(path),SizeMode=PictureBoxSizeMode.Zoom,Left=8,Top=8,Width=panel.Width-16,Height=210};var countdown=new Label{ForeColor=Color.Gold,Left=10,Top=222,Width=200};panel.Controls.AddRange([picture,countdown]);var left=10;var timer=new System.Windows.Forms.Timer{Interval=1000};countdown.Text="Deletes in 10 seconds";timer.Tick+=(_,_)=>{left--;countdown.Text=$"Deletes in {left} seconds";if(left<=0){timer.Stop();timer.Dispose();picture.Image?.Dispose();try{File.Delete(path);}catch{}if(id is not null)DeleteLocal(id);else{messages.Controls.Remove(panel);panel.Dispose();}}};timer.Start();};
     }
     void AddImage(string name,string path,string? id,bool mine,bool save)
     {
