@@ -14,7 +14,7 @@ sealed class GameForm : Form
     readonly Panel login = new() { BackColor = Color.FromArgb(28, 31, 45), Width = 440, Height = 380 };
     readonly FlowLayoutPanel messages = new() { AutoScroll = true, WrapContents = false, FlowDirection = FlowDirection.TopDown, BackColor = Color.FromArgb(18,20,30) };
     readonly ListBox members = new() { BorderStyle = BorderStyle.None, BackColor = Color.FromArgb(28,31,45), ForeColor = Color.White, Font = new Font("Segoe UI", 10) };
-    readonly TextBox compose = new() { Font = new Font("Segoe UI", 11), BackColor = Color.FromArgb(37,41,57), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
+    readonly TextBox compose = new() { Font = new Font("Segoe UI", 11), BackColor = Color.FromArgb(37,41,57), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle, Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Vertical };
     readonly Button send = new() { Text = "SEND", BackColor = Color.FromArgb(63,89,255), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Button attach = new() { Text = "IMAGE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Button attachFile = new() { Text = "FILE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
@@ -39,7 +39,7 @@ sealed class GameForm : Form
     {
         login.Left=(ClientSize.Width-login.Width)/2;login.Top=(ClientSize.Height-login.Height)/2;
         header.SetBounds(18,12,ClientSize.Width-36,32); members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
-        messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-120); compose.SetBounds(18,ClientSize.Height-52,ClientSize.Width-495,34);attachFile.SetBounds(ClientSize.Width-465,ClientSize.Height-52,80,34);attach.SetBounds(ClientSize.Width-375,ClientSize.Height-52,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-52,90,34);
+        messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-155); compose.SetBounds(18,ClientSize.Height-87,ClientSize.Width-495,69);attachFile.SetBounds(ClientSize.Width-465,ClientSize.Height-69,80,34);attach.SetBounds(ClientSize.Width-375,ClientSize.Height-69,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-69,90,34);
     }
     void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=attachFile.Visible=send.Visible=!show; }
     async Task Join()
