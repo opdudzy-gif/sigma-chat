@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: sigmachat-server
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /health

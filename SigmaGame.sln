@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SigmaGame.Client", "client\SigmaGame.Client.csproj", "{30116DE2-F70B-4579-90A7-266819432A5C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SigmaGame.Server", "server\SigmaGame.Server.csproj", "{5E82B3BF-56E8-4555-BEE0-B4F65C7F355E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{30116DE2-F70B-4579-90A7-266819432A5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30116DE2-F70B-4579-90A7-266819432A5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30116DE2-F70B-4579-90A7-266819432A5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30116DE2-F70B-4579-90A7-266819432A5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E82B3BF-56E8-4555-BEE0-B4F65C7F355E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E82B3BF-56E8-4555-BEE0-B4F65C7F355E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E82B3BF-56E8-4555-BEE0-B4F65C7F355E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E82B3BF-56E8-4555-BEE0-B4F65C7F355E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
