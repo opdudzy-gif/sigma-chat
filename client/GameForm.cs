@@ -1,6 +1,8 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
+using System.Security.Cryptography;
 
 namespace SigmaGame;
 
@@ -20,18 +22,19 @@ sealed class GameForm : Form
     readonly Button attachFile = new() { Text = "FILE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Label header = new() { ForeColor = Color.White, Font = new Font("Segoe UI", 13, FontStyle.Bold), Text = "SigmaChat" };
     readonly Button dump = new() { Text = "DUMP CHAT", BackColor = Color.FromArgb(150,40,50), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Visible = false };
-    ClientWebSocket? socket; CancellationTokenSource? cts; string myId = "", activeRoom = "";
+    readonly Button call = new() { Text = "CALL", BackColor = Color.FromArgb(35,135,90), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Visible = false };
+    ClientWebSocket? socket; CancellationTokenSource? cts; string myId = "", activeRoom = "", activePin = "";
     readonly List<SavedItem> history = [];
     readonly string dataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SigmaChat");
 
     public GameForm()
     {
         Text="SigmaChat — Private Rooms"; ClientSize=new(920,600); MinimumSize=new(720,480); BackColor=Color.FromArgb(18,20,30); KeyPreview=true;
-        Controls.AddRange([header,dump,messages,members,compose,attach,attachFile,send,login]); Directory.CreateDirectory(dataFolder);
+        Controls.AddRange([header,call,dump,messages,members,compose,attach,attachFile,send,login]); Directory.CreateDirectory(dataFolder);
         var title=new Label { Text="Σ  SIGMACHAT", Font=new Font("Segoe UI",24,FontStyle.Bold), ForeColor=Color.DeepSkyBlue, AutoSize=true, Left=72,Top=25 }; login.Controls.Add(title);
         AddField("Server",server,105); AddField("Private room code",room,165); AddField("Your name",playerName,225);
         connect.Left=130; connect.Top=280; login.Controls.Add(connect); status.Left=20; status.Top=335; login.Controls.Add(status);
-        connect.Click += async (_,_) => await Join(); send.Click += async (_,_) => await SendChat(); attach.Click += async (_,_) => await SendImage(); attachFile.Click += async(_,_)=>await SendFile(); dump.Click += async(_,_)=>await DumpChat(); Shown += async(_,_)=>await Updater.Check(this);
+        connect.Click += async (_,_) => await Join(); send.Click += async (_,_) => await SendChat(); attach.Click += async (_,_) => await SendImage(); attachFile.Click += async(_,_)=>await SendFile(); dump.Click += async(_,_)=>await DumpChat(); call.Click += (_,_)=>StartCall(); Shown += async(_,_)=>await Updater.Check(this);
         compose.KeyDown += async (_,e) => { if(e.KeyCode==Keys.Enter && !e.Shift) { e.SuppressKeyPress=true; await SendChat(); } };
         Resize += (_,_) => LayoutUi(); FormClosing += (_,_) => cts?.Cancel(); LayoutUi(); ShowLogin(true);
     }
@@ -39,10 +42,10 @@ sealed class GameForm : Form
     void LayoutUi()
     {
         login.Left=(ClientSize.Width-login.Width)/2;login.Top=(ClientSize.Height-login.Height)/2;
-        header.SetBounds(18,12,ClientSize.Width-180,32);dump.SetBounds(ClientSize.Width-145,10,130,34);members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
+        header.SetBounds(18,12,ClientSize.Width-275,32);call.SetBounds(ClientSize.Width-240,10,85,34);dump.SetBounds(ClientSize.Width-145,10,130,34);members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
         messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-155); compose.SetBounds(18,ClientSize.Height-87,ClientSize.Width-495,69);attachFile.SetBounds(ClientSize.Width-465,ClientSize.Height-69,80,34);attach.SetBounds(ClientSize.Width-375,ClientSize.Height-69,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-69,90,34);
     }
-    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=attachFile.Visible=send.Visible=!show;if(show)dump.Visible=false; }
+    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=attachFile.Visible=send.Visible=!show;if(show)dump.Visible=call.Visible=false; }
     async Task Join()
     {
         connect.Enabled=false;status.Text="Connecting…";
@@ -86,14 +89,14 @@ sealed class GameForm : Form
                 if(type=="keyRequired")
                 {
                     var creating=root.GetProperty("create").GetBoolean();var key=(string?)Invoke(()=>KeyPrompt.Ask(this,creating));
-                    if(string.IsNullOrEmpty(key)){BeginInvoke(()=>Disconnect("A room key is required."));return;}await SendJson(new{type="auth",key});
+                    if(string.IsNullOrEmpty(key)){BeginInvoke(()=>Disconnect("A security PIN is required."));return;}activePin=key;await SendJson(new{type="auth",key});
                 }
                 else if(type=="welcome")
                 {
                     myId=root.GetProperty("id").GetString()??"";
                     var joinedRoom=root.GetProperty("room").GetString()??"PRIVATE ROOM";
                     var owner=root.TryGetProperty("owner",out var own)&&own.GetBoolean();
-                    BeginInvoke(()=>{header.Text=$"🔒  {joinedRoom}   •   SigmaChat";dump.Visible=owner;});
+                    BeginInvoke(()=>{header.Text=$"🔒  {joinedRoom}   •   SigmaChat";dump.Visible=owner;call.Visible=true;});
                 }
                 else if(type=="members") { var names=root.GetProperty("members").EnumerateArray().Select(x=>"●  "+x.GetString()).ToArray();BeginInvoke(()=>{members.Items.Clear();members.Items.Add("ROOM MEMBERS");members.Items.AddRange(names);}); }
                 else if(type=="notice") Append("SYSTEM",root.GetProperty("message").GetString()??"",Color.Gray,null,false,true);
@@ -147,6 +150,13 @@ sealed class GameForm : Form
     {
         if(MessageBox.Show(this,"Permanently wipe this room's visible messages and saved attachments for everyone currently connected?","Dump chat",MessageBoxButtons.YesNo,MessageBoxIcon.Warning)!=DialogResult.Yes)return;
         try{await SendJson(new{type="dump"});}catch{Disconnect("Connection lost.");}
+    }
+    void StartCall()
+    {
+        if(string.IsNullOrEmpty(activeRoom)||string.IsNullOrEmpty(activePin))return;
+        if(MessageBox.Show(this,"This opens a voice/video meeting on the external Jitsi service. Your browser will request microphone/camera access. Continue?","Start call",MessageBoxButtons.YesNo,MessageBoxIcon.Information)!=DialogResult.Yes)return;
+        var hash=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"SigmaChat|{activeRoom}|{activePin}"))).ToLowerInvariant();
+        Process.Start(new ProcessStartInfo($"https://meet.jit.si/SigmaChat-{hash}"){UseShellExecute=true});
     }
     void ApplyDump(string by)
     {

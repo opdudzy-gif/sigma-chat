@@ -10,7 +10,7 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 var app = builder.Build();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 var hub = new ChatHub();
-app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "5.4", status = "online", storage = "ephemeral" }));
+app.MapGet("/", () => Results.Ok(new { name = "SigmaChat server", version = "5.5", status = "online", storage = "ephemeral" }));
 app.MapGet("/health", () => Results.Ok("ok"));
 app.Map("/ws", async context =>
 {

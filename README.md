@@ -8,6 +8,8 @@ Room access uses a separate key prompt after selecting a room. Users can share n
 
 The message editor supports multiple lines: press **Shift+Enter** for a new line and **Enter** to send. Room owners create a 4–8 digit Security PIN and can use **Dump Chat** to clear connected clients' room history and saved attachments.
 
+The **Call** button opens a shared Jitsi voice/video meeting in the browser. Its hard-to-guess meeting identifier is derived from the room and Security PIN. Calls are handled by the external `meet.jit.si` service, not the SigmaChat server.
+
 Right-click a message or image to delete it locally. Senders can also choose **Delete for everyone** while the server room remains active.
 
 ## Quick local test
