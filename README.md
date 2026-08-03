@@ -6,7 +6,7 @@ Chat history and received images are saved locally in `%LOCALAPPDATA%\SigmaChat`
 
 Room access uses a separate key prompt after selecting a room. Users can share normal images and general files up to 5 MB. Received files are never opened automatically and use a **Save As** button.
 
-The message editor supports multiple lines: press **Shift+Enter** for a new line and **Enter** to send.
+The message editor supports multiple lines: press **Shift+Enter** for a new line and **Enter** to send. Room owners create a 4–8 digit Security PIN and can use **Dump Chat** to clear connected clients' room history and saved attachments.
 
 Right-click a message or image to delete it locally. Senders can also choose **Delete for everyone** while the server room remains active.
 

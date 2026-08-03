@@ -19,6 +19,7 @@ sealed class GameForm : Form
     readonly Button attach = new() { Text = "IMAGE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Button attachFile = new() { Text = "FILE", BackColor = Color.FromArgb(48,52,70), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
     readonly Label header = new() { ForeColor = Color.White, Font = new Font("Segoe UI", 13, FontStyle.Bold), Text = "SigmaChat" };
+    readonly Button dump = new() { Text = "DUMP CHAT", BackColor = Color.FromArgb(150,40,50), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Visible = false };
     ClientWebSocket? socket; CancellationTokenSource? cts; string myId = "", activeRoom = "";
     readonly List<SavedItem> history = [];
     readonly string dataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SigmaChat");
@@ -26,11 +27,11 @@ sealed class GameForm : Form
     public GameForm()
     {
         Text="SigmaChat — Private Rooms"; ClientSize=new(920,600); MinimumSize=new(720,480); BackColor=Color.FromArgb(18,20,30); KeyPreview=true;
-        Controls.AddRange([header,messages,members,compose,attach,attachFile,send,login]); Directory.CreateDirectory(dataFolder);
+        Controls.AddRange([header,dump,messages,members,compose,attach,attachFile,send,login]); Directory.CreateDirectory(dataFolder);
         var title=new Label { Text="Σ  SIGMACHAT", Font=new Font("Segoe UI",24,FontStyle.Bold), ForeColor=Color.DeepSkyBlue, AutoSize=true, Left=72,Top=25 }; login.Controls.Add(title);
         AddField("Server",server,105); AddField("Private room code",room,165); AddField("Your name",playerName,225);
         connect.Left=130; connect.Top=280; login.Controls.Add(connect); status.Left=20; status.Top=335; login.Controls.Add(status);
-        connect.Click += async (_,_) => await Join(); send.Click += async (_,_) => await SendChat(); attach.Click += async (_,_) => await SendImage(); attachFile.Click += async(_,_)=>await SendFile(); Shown += async(_,_)=>await Updater.Check(this);
+        connect.Click += async (_,_) => await Join(); send.Click += async (_,_) => await SendChat(); attach.Click += async (_,_) => await SendImage(); attachFile.Click += async(_,_)=>await SendFile(); dump.Click += async(_,_)=>await DumpChat(); Shown += async(_,_)=>await Updater.Check(this);
         compose.KeyDown += async (_,e) => { if(e.KeyCode==Keys.Enter && !e.Shift) { e.SuppressKeyPress=true; await SendChat(); } };
         Resize += (_,_) => LayoutUi(); FormClosing += (_,_) => cts?.Cancel(); LayoutUi(); ShowLogin(true);
     }
@@ -38,10 +39,10 @@ sealed class GameForm : Form
     void LayoutUi()
     {
         login.Left=(ClientSize.Width-login.Width)/2;login.Top=(ClientSize.Height-login.Height)/2;
-        header.SetBounds(18,12,ClientSize.Width-36,32); members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
+        header.SetBounds(18,12,ClientSize.Width-180,32);dump.SetBounds(ClientSize.Width-145,10,130,34);members.SetBounds(ClientSize.Width-190,55,175,ClientSize.Height-120);
         messages.SetBounds(18,55,ClientSize.Width-225,ClientSize.Height-155); compose.SetBounds(18,ClientSize.Height-87,ClientSize.Width-495,69);attachFile.SetBounds(ClientSize.Width-465,ClientSize.Height-69,80,34);attach.SetBounds(ClientSize.Width-375,ClientSize.Height-69,80,34); send.SetBounds(ClientSize.Width-285,ClientSize.Height-69,90,34);
     }
-    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=attachFile.Visible=send.Visible=!show; }
+    void ShowLogin(bool show) { login.Visible=show; header.Visible=messages.Visible=members.Visible=compose.Visible=attach.Visible=attachFile.Visible=send.Visible=!show;if(show)dump.Visible=false; }
     async Task Join()
     {
         connect.Enabled=false;status.Text="Connecting…";
@@ -91,7 +92,8 @@ sealed class GameForm : Form
                 {
                     myId=root.GetProperty("id").GetString()??"";
                     var joinedRoom=root.GetProperty("room").GetString()??"PRIVATE ROOM";
-                    BeginInvoke(()=>header.Text=$"🔒  {joinedRoom}   •   SigmaChat");
+                    var owner=root.TryGetProperty("owner",out var own)&&own.GetBoolean();
+                    BeginInvoke(()=>{header.Text=$"🔒  {joinedRoom}   •   SigmaChat";dump.Visible=owner;});
                 }
                 else if(type=="members") { var names=root.GetProperty("members").EnumerateArray().Select(x=>"●  "+x.GetString()).ToArray();BeginInvoke(()=>{members.Items.Clear();members.Items.Add("ROOM MEMBERS");members.Items.AddRange(names);}); }
                 else if(type=="notice") Append("SYSTEM",root.GetProperty("message").GetString()??"",Color.Gray,null,false,true);
@@ -99,6 +101,7 @@ sealed class GameForm : Form
                 else if(type=="image") { var senderId=root.GetProperty("senderId").GetString();SaveAndAppendImage(root.GetProperty("sender").GetString()??"",root.GetProperty("image").GetString()??"",root.GetProperty("id").GetString(),senderId==myId); }
                 else if(type=="file") { var senderId=root.GetProperty("senderId").GetString();SaveAndAppendFile(root.GetProperty("sender").GetString()??"",root.GetProperty("fileName").GetString()??"file",root.GetProperty("data").GetString()??"",root.GetProperty("id").GetString(),senderId==myId); }
                 else if(type=="delete") { var id=root.GetProperty("id").GetString();if(id is not null)BeginInvoke(()=>DeleteLocal(id)); }
+                else if(type=="dump") { var by=root.GetProperty("by").GetString()??"Owner";BeginInvoke(()=>ApplyDump(by)); }
                 else if(type=="error") { Disconnect(root.GetProperty("message").GetString()??"Server error");return; }
             }
         } catch { }
@@ -139,6 +142,16 @@ sealed class GameForm : Form
     {
         var control=messages.Controls.Cast<Control>().FirstOrDefault(x=>x.Tag as string==id);if(control is not null){messages.Controls.Remove(control);control.Dispose();}
         history.RemoveAll(x=>x.Id==id);SaveHistory();
+    }
+    async Task DumpChat()
+    {
+        if(MessageBox.Show(this,"Permanently wipe this room's visible messages and saved attachments for everyone currently connected?","Dump chat",MessageBoxButtons.YesNo,MessageBoxIcon.Warning)!=DialogResult.Yes)return;
+        try{await SendJson(new{type="dump"});}catch{Disconnect("Connection lost.");}
+    }
+    void ApplyDump(string by)
+    {
+        foreach(var item in history.Where(x=>x.Path is not null).ToArray())try{if(Path.GetFullPath(item.Path!).StartsWith(Path.GetFullPath(dataFolder),StringComparison.OrdinalIgnoreCase))File.Delete(item.Path!);}catch{}
+        history.Clear();SaveHistory();var old=messages.Controls.Cast<Control>().ToArray();messages.Controls.Clear();foreach(var control in old)control.Dispose();Append("SYSTEM",$"{by} dumped the chat history.",Color.Gray,null,false,true);
     }
     void LoadHistory()
     {
